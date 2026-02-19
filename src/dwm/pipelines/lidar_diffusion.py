@@ -6,7 +6,11 @@ from dwm.functional import gumbel_sigmoid
 from dwm.models.vq_point_cloud import VQPointCloud
 from dwm.models.vae_point_cloud import VAEPointCloud
 from dwm.models.crossview_temporal_dit import DiTCrossviewTemporalConditionModel
-from dwm.utils.lidar import preprocess_points, postprocess_points, voxels2points
+from dwm.utils.lidar import (
+    preprocess_points, postprocess_points, voxels2points,
+    points_to_range_image, write_pcd_binary,
+)
+from PIL import Image as PilImage
 from dwm.utils.preview import make_lidar_preview_tensor, save_tensor_to_video
 import math
 import numpy as np
@@ -1271,6 +1275,39 @@ class LidarDiffusionPipeline(torch.nn.Module):
                 ], axis=-1)
                 with open(path, "wb") as f:
                     f.write(padded_points.tobytes())
+
+        # Save per-rollout PCD and range-image outputs.
+        # Output layout:
+        #   <output_path>/rollout_<scene_id>/pcd/t000.pcd  t001.pcd  ...
+        #   <output_path>/rollout_<scene_id>/ri/t000.png   t001.png  ...
+        if self.inference_config.get("save_rollout_results", False):
+            pred_pts = results['pred_points']
+            pred_pts_sensor = postprocess_points(batch, pred_pts)
+            for b_idx in range(batch_size):
+                # Build a readable rollout ID from the first LIDAR filename.
+                rollout_id = f"rollout_{b_idx:06d}"
+                for ch in batch["sample_data"][b_idx]:
+                    for fn in ch.get("filename", []):
+                        if fn.endswith(".bin"):
+                            base = fn.split("/")[-1].replace(".pcd.bin", "").replace(".bin", "")
+                            rollout_id = base
+                            break
+                    if rollout_id != f"rollout_{b_idx:06d}":
+                        break
+
+                rollout_dir = os.path.join(self.output_path, rollout_id)
+                pcd_dir = os.path.join(rollout_dir, "pcd")
+                ri_dir = os.path.join(rollout_dir, "ri")
+                os.makedirs(pcd_dir, exist_ok=True)
+                os.makedirs(ri_dir, exist_ok=True)
+
+                for t_idx, pts in enumerate(pred_pts_sensor[b_idx]):
+                    pts_np = pts.numpy()
+                    write_pcd_binary(
+                        os.path.join(pcd_dir, f"t{t_idx:03d}.pcd"), pts_np)
+                    ri = points_to_range_image(pts_np)
+                    PilImage.fromarray(ri).save(
+                        os.path.join(ri_dir, f"t{t_idx:03d}.png"))
 
     @torch.no_grad()
     def evaluate_pipeline(
