@@ -73,7 +73,9 @@
             "inference_steps": 5,
             "separate_forward": true,
             "use_ground_truth_as_reference": true,
-            "enable_autoregressive_inference": true
+            "enable_autoregressive_inference": true,
+            "save_pred_results": true,
+            "save_gt_results": true
         },
         "train_diffusion_scheduler": {
             "_class_name": "diffusers.FlowMatchEulerDiscreteScheduler",
@@ -383,6 +385,18 @@
         "pop_list": [
             "images"
         ]
+    },
+    "validation_dataloader": {
+        "batch_size": 1,
+        "num_workers": 2,
+        "shuffle": false,
+        "drop_last": false,
+        "collate_fn": {
+            "_class_name": "dwm.datasets.common.CollateFnIgnoring",
+            "keys": [
+                "lidar_points"
+            ]
+        }
     },
     "preview_dataloader": {
         "batch_size": 1,
