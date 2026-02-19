@@ -72,9 +72,11 @@ if __name__ == "__main__":
         print("The validation dataset is loaded with {} items.".format(
             len(validation_dataset)))
 
+    dataloader_config = config.get(
+        "validation_dataloader", config.get("preview_dataloader", {}))
     validation_dataloader = torch.utils.data.DataLoader(
         validation_dataset,
-        **dwm.common.instantiate_config(config["validation_dataloader"]))
+        **dwm.common.instantiate_config(dataloader_config))
 
     os.makedirs(args.output_path, exist_ok=True)
 
