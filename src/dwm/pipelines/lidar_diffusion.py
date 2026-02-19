@@ -1278,11 +1278,15 @@ class LidarDiffusionPipeline(torch.nn.Module):
 
         # Save per-rollout PCD and range-image outputs.
         # Output layout:
-        #   <output_path>/rollout_<scene_id>/pcd/t000.pcd  t001.pcd  ...
-        #   <output_path>/rollout_<scene_id>/ri/t000.png   t001.png  ...
+        #   <output_path>/<scene_id>/pcd/t000.pcd     (predicted)
+        #   <output_path>/<scene_id>/ri/t000.png      (predicted)
+        #   <output_path>/<scene_id>/gt_pcd/t000.pcd  (ground truth)
+        #   <output_path>/<scene_id>/gt_ri/t000.png   (ground truth)
         if self.inference_config.get("save_rollout_results", False):
             pred_pts = results['pred_points']
             pred_pts_sensor = postprocess_points(batch, pred_pts)
+            gt_pts = results['gt_points']
+            gt_pts_sensor = postprocess_points(batch, gt_pts)
             for b_idx in range(batch_size):
                 # Build a readable rollout ID from the first LIDAR filename.
                 rollout_id = f"rollout_{b_idx:06d}"
@@ -1296,18 +1300,22 @@ class LidarDiffusionPipeline(torch.nn.Module):
                         break
 
                 rollout_dir = os.path.join(self.output_path, rollout_id)
-                pcd_dir = os.path.join(rollout_dir, "pcd")
-                ri_dir = os.path.join(rollout_dir, "ri")
-                os.makedirs(pcd_dir, exist_ok=True)
-                os.makedirs(ri_dir, exist_ok=True)
+                for subdir in ("pcd", "ri", "gt_pcd", "gt_ri"):
+                    os.makedirs(os.path.join(rollout_dir, subdir), exist_ok=True)
 
                 for t_idx, pts in enumerate(pred_pts_sensor[b_idx]):
                     pts_np = pts.numpy()
                     write_pcd_binary(
-                        os.path.join(pcd_dir, f"t{t_idx:03d}.pcd"), pts_np)
-                    ri = points_to_range_image(pts_np)
-                    PilImage.fromarray(ri).save(
-                        os.path.join(ri_dir, f"t{t_idx:03d}.png"))
+                        os.path.join(rollout_dir, "pcd", f"t{t_idx:03d}.pcd"), pts_np)
+                    PilImage.fromarray(points_to_range_image(pts_np)).save(
+                        os.path.join(rollout_dir, "ri", f"t{t_idx:03d}.png"))
+
+                for t_idx, pts in enumerate(gt_pts_sensor[b_idx]):
+                    pts_np = pts.numpy()
+                    write_pcd_binary(
+                        os.path.join(rollout_dir, "gt_pcd", f"t{t_idx:03d}.pcd"), pts_np)
+                    PilImage.fromarray(points_to_range_image(pts_np)).save(
+                        os.path.join(rollout_dir, "gt_ri", f"t{t_idx:03d}.png"))
 
     @torch.no_grad()
     def evaluate_pipeline(
