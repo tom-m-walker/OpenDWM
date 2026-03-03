@@ -126,8 +126,8 @@ class MaskGITPipeline(torch.nn.Module):
             self.bi_directional_Transformer.pred.weight.copy_(
                 self.vq_point_cloud.vector_quantizer.embedding.weight)
 
+        self.resume_from = resume_from
         if resume_from is not None:
-            self.resume_from = resume_from
             model_state_dict = MaskGITPipeline.load_state(
                 os.path.join(
                     output_path, "checkpoints", "{}.pth".format(resume_from)))
@@ -712,7 +712,7 @@ class MaskGITPipeline(torch.nn.Module):
         torch.cuda.empty_cache() # might help to avoid OOM
 
     def save_results(self, results, batch, batch_size, num_frames):
-        suffix = str(self.resume_from)
+        suffix = str(self.resume_from) if self.resume_from is not None else ""
 
         gt_voxels = results['gt_voxels'] if "gt_voxels" in results else None
         pred_voxels = results['pred_voxels'] if "pred_voxels" in results else None
