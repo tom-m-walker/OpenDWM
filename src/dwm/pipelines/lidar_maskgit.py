@@ -884,25 +884,20 @@ class MaskGITPipeline(torch.nn.Module):
         voxels = voxels.flatten(0, 1)
         lidar_feats = self.vq_point_cloud.lidar_encoder(voxels)
         # Select the first few frames as the reference frames
+        reference_code, _, reference_code_indices = self.vq_point_cloud.vector_quantizer(
+            lidar_feats, self.vq_point_cloud.code_age, self.vq_point_cloud.code_usage)
+        # prepare the code and code_indices for the init step
+        code = torch.zeros((batch_size * num_training_frames, *reference_code.shape[1:]),
+                device=reference_code.device, dtype=reference_code.dtype)
+        code_indices = torch.ones((batch_size * num_training_frames, *reference_code_indices.shape[1:]),
+                device=reference_code_indices.device, dtype=reference_code_indices.dtype) * -1
         if self.inference_config.get("use_ground_truth_as_reference", True):
-            reference_code, _, reference_code_indices = self.vq_point_cloud.vector_quantizer(
-                lidar_feats, self.vq_point_cloud.code_age, self.vq_point_cloud.code_usage)
-            # prepare the code and code_indices for the init step
-            code = torch.zeros((batch_size * num_training_frames, *reference_code.shape[1:]),
-                    device=reference_code.device, dtype=reference_code.dtype)
-            code_indices = torch.ones((batch_size * num_training_frames, *reference_code_indices.shape[1:]),
-                    device=reference_code_indices.device, dtype=reference_code_indices.dtype) * -1
             reference_frame_mask = torch.ones((batch_size, num_training_frames),
                                             device=code.device, dtype=torch.bool)
             reference_frame_mask[:, num_reference_frame:] = False
             reference_frame_mask = reference_frame_mask.flatten(0, 1)
             code[reference_frame_mask] = reference_code
             code_indices[reference_frame_mask] = reference_code_indices
-        else:
-            code = torch.zeros((batch_size * num_training_frames, *reference_code.shape[1:]),
-                    device=reference_code.device, dtype=reference_code.dtype)
-            code_indices = torch.ones((batch_size * num_training_frames, *reference_code_indices.shape[1:]),
-                    device=reference_code_indices.device, dtype=reference_code_indices.dtype) * -1
 
         results = {}
         results['pred_points'] = [[] for _ in range(batch_size)]
